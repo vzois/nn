@@ -77,14 +77,14 @@ def net():
 	
 	y_ = tf.placeholder(tf.float32, shape=[None, 1000])	
 	cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=y_full7))
-	optimizer = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
+	optimizer = tf.train.GradientDescentOptimizer(1e-4).minimize(cross_entropy)
 	
 	predict = tf.equal(tf.argmax(y_full7, 1), tf.argmax(y_, 1))
 	accuracy = tf.reduce_mean(tf.cast(predict, tf.float32))
 	print "acc:",accuracy
 
 	iter = 10
-	frames = 50
+	frames = 512
 	tt = 0
 	with tf.Session() as sess:
 		sess.run(tf.global_variables_initializer())
@@ -95,7 +95,9 @@ def net():
 			lt = time()
 			print "train step (",i,")"
 			optimizer.run(feed_dict={x: batch[0], y_: batch[1]})
-			tt += time() - lt
+			lt= time() - lt
+			print lt
+			tt += lt
 			
 		print "Training Elapsed time(sec):",tt
 		print "Training Time per Iteration(sec):",tt/iter
@@ -103,12 +105,15 @@ def net():
 		
 		tt = 0
 		iter = 10
-		frames = 64
+		frames = 512
 		for i in range(iter):
 			batch = fake_data(227*227*3,1000,frames)
+			print "classify step (",i,")"
 			lt = time()
 			train_accuracy = accuracy.eval(feed_dict={x:batch[0], y_:batch[1]})
-			tt+= time() - lt
+			lt= time() - lt
+			print lt
+			tt += lt
 		print "Classification Elapsed Time(sec):",tt
 		print "Classification Time per Iteration(sec):",tt/iter
 		print "Classification Frame per Second:",frames*iter/tt
