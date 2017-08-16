@@ -1,0 +1,35 @@
+TensorFlow:  1.2
+Model:       alexnet
+Mode:        forward-only
+Batch size:  16 global
+             16 per device
+Devices:     ['/gpu:0']
+Data format: NCHW
+Optimizer:   sgd
+Variables:   parameter_server
+==========
+Generating model
+Running warm up
+Done warm up
+Step	Img/sec	loss
+1	images/sec: 2942.2 +/- 0.0 (jitter = 0.0)	0.000
+10	images/sec: 2949.7 +/- 10.3 (jitter = 28.8)	0.000
+20	images/sec: 2966.8 +/- 7.2 (jitter = 32.6)	0.000
+30	images/sec: 2972.9 +/- 5.6 (jitter = 30.0)	0.000
+Starting real work at step 49 at time Wed Aug 16 16:20:34 2017
+40	images/sec: 2975.6 +/- 4.7 (jitter = 27.2)	0.000
+50	images/sec: 2977.0 +/- 3.9 (jitter = 26.2)	0.000
+60	images/sec: 2978.8 +/- 3.5 (jitter = 27.4)	0.000
+70	images/sec: 2977.0 +/- 3.2 (jitter = 26.7)	0.000
+80	images/sec: 2979.0 +/- 2.9 (jitter = 25.5)	0.000
+90	images/sec: 2978.0 +/- 2.7 (jitter = 25.3)	0.000
+100	images/sec: 2979.0 +/- 2.5 (jitter = 25.3)	0.000
+110	images/sec: 2980.2 +/- 2.4 (jitter = 25.8)	0.000
+120	images/sec: 2980.9 +/- 2.3 (jitter = 26.2)	0.000
+130	images/sec: 2980.5 +/- 2.2 (jitter = 26.1)	0.000
+Finishing real work at step 141 at time Wed Aug 16 16:20:34 2017
+----------------------------------------------------------------
+total images/sec: 2935.24
+----------------------------------------------------------------
+weights: 61870554
+flops: 26849478656

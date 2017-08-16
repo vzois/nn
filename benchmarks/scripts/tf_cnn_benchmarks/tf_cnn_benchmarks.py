@@ -59,15 +59,9 @@ tf.flags.DEFINE_string('model', 'trivial', 'name of the model to run')
 #   the forward-only option, which will only compute the loss function.
 #   forward-only cannot be enabled with eval at the same time.
 tf.flags.DEFINE_boolean('eval', False, 'whether use eval or benchmarking')
-# tf.flags.DEFINE_boolean('forward_only', False, """whether use forward-only or
-#                          training for benchmarking""")
 
-if sys.argv[1] == "train":
-  print("<train>")
-  tf.flags.DEFINE_boolean('forward_only', False, """whether use forward-only or training for benchmarking""")
-else:
-  print("classify")
-  tf.flags.DEFINE_boolean('forward_only', True, """whether use forward-only or training for benchmarking""")
+tf.flags.DEFINE_boolean('forward_only', False, """whether use forward-only or training for benchmarking""")
+
 tf.flags.DEFINE_integer('batch_size', 0, 'batch size per compute device')
 tf.flags.DEFINE_integer('num_batches', 100,
                         'number of batches to run, excluding warmup')
@@ -102,12 +96,9 @@ tf.flags.DEFINE_string('local_parameter_device', 'gpu',
                        """Device to use as parameter server: cpu or gpu.
                           For distributed training, it can affect where caching
                           of variables happens.""")
-if sys.argv[2] == 'cpu':
-    tf.flags.DEFINE_string('device', 'cpu',"""Device to use for computation: cpu or gpu""")
-    tf.flags.DEFINE_string('data_format', 'NHWC',"""Data layout to use: NHWC (TF native) or NCHW (cuDNN native).""")
-else:
-    tf.flags.DEFINE_string('device', 'gpu',"""Device to use for computation: cpu or gpu""")
-    tf.flags.DEFINE_string('data_format', 'NCHW',"""Data layout to use: NHWC (TF native) or NCHW (cuDNN native).""")
+
+tf.flags.DEFINE_string('device', 'cpu',"""Device to use for computation: cpu or gpu""")
+tf.flags.DEFINE_string('data_format', 'NHWC',"""Data layout to use: NHWC (TF native) or NCHW (cuDNN native).""")
     
 tf.flags.DEFINE_integer('num_intra_threads', 1,
                         """Number of threads to use for intra-op
