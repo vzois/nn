@@ -1,8 +1,12 @@
+from tensorflow.python.framework import ops
 import tensorflow as tf
 
 from time import time
 from common import var
 from common import fake_data
+from common import fake_data_np
+
+#import tensorflow.python.framework
 
 def net():
 	x = tf.placeholder(tf.float32, shape=[None,227 * 227 * 3])
@@ -84,14 +88,17 @@ def net():
 	print "acc:",accuracy
 
 	iter = 10
-	frames = 512
+	frames = 100
 	tt = 0
 	with tf.Session() as sess:
 		sess.run(tf.global_variables_initializer())
 		
+		#warm-up
+		batch = fake_data_np(227*227*3,1000,frames)
+		optimizer.run(feed_dict={x: batch[0], y_: batch[1]})
 		for i in range(iter):
 			
-			batch = fake_data(227*227*3,1000,frames)
+			batch = fake_data_np(227*227*3,1000,frames)
 			lt = time()
 			print "train step (",i,")"
 			optimizer.run(feed_dict={x: batch[0], y_: batch[1]})
@@ -105,9 +112,9 @@ def net():
 		
 		tt = 0
 		iter = 10
-		frames = 512
+		frames = 100
 		for i in range(iter):
-			batch = fake_data(227*227*3,1000,frames)
+			batch = fake_data_np(227*227*3,1000,frames)
 			print "classify step (",i,")"
 			lt = time()
 			train_accuracy = accuracy.eval(feed_dict={x:batch[0], y_:batch[1]})
@@ -117,5 +124,18 @@ def net():
 		print "Classification Elapsed Time(sec):",tt
 		print "Classification Time per Iteration(sec):",tt/iter
 		print "Classification Frame per Second:",frames*iter/tt
-	
-net()
+
+def testSimpleStatistics():
+  g = tf.Graph()
+  with g.as_default():
+    a = tf.Variable(tf.random_normal([25, 16]))
+    b = tf.Variable(tf.random_normal([16, 9]))
+    tf.matmul(a, b)
+    for op in g.get_operations():
+      flops = ops.get_stats_for_node_def(g, op.node_def, "flops").value
+      print(flops)
+#testSimpleStatistics()
+
+with tf.device("/cpu:0"):
+	net()
+
