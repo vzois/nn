@@ -1,22 +1,28 @@
 from tensorflow.python.framework import ops
 import tensorflow as tf
+import tensorflow.contrib.slim as slim
+import numpy as np
 
 from time import time
 from common import var
 from common import fake_data
 from common import fake_data_np
+from common import fake_input
+from common import fake_label
+
+import argparse
 
 #import tensorflow.python.framework
-
-def net():
-	x = tf.placeholder(tf.float32, shape=[None,227 * 227 * 3])
+		
+def net_arch(dtype=tf.float32):
+	x = tf.placeholder(dtype=dtype, shape=[None,227 * 227 * 3])
 	print "x:",x
 	x_image = tf.reshape(x, [-1, 227,227,3])
 	print "x_image:",x_image
 	
 	print "<Layer 1>"
-	W_1 = var([11,11,3,96],"T_NORMAL")
-	b_1 = var([96],"CONSTANT",0.1)
+	W_1 = var([11,11,3,96],"T_NORMAL",dtype=dtype)
+	b_1 = var([96],"CONSTANT",0.1,dtype=dtype)
 	print "W_1:", W_1
 	print "b_1:", b_1
 	h_conv1 = tf.nn.relu(tf.nn.conv2d(x_image, W_1, strides=[1,4,4,1], padding='VALID') + b_1)
@@ -25,8 +31,8 @@ def net():
 	print "h_pool1:",h_pool1
 	
 	print "<Layer 2>"
-	W_2 = var([5,5,96,256],"T_NORMAL")
-	b_2 = var([256],"CONSTANT",0.1)
+	W_2 = var([5,5,96,256],"T_NORMAL",dtype=dtype)
+	b_2 = var([256],"CONSTANT",0.1,dtype=dtype)
 	print "W_2:", W_2
 	print "b_2:", b_2
 	h_pool1 = tf.pad(h_pool1, [[0, 0], [2, 2], [2, 2], [0, 0]],"CONSTANT")#SAME OP AS BELOW WITHOUT PADDING
@@ -37,24 +43,24 @@ def net():
 	print "h_pool2:",h_pool2
 	
 	print "<Layer 3>"
-	W_3 = var([3,3,256,384],"T_NORMAL")
-	b_3 = var([384],"CONSTANT",0.1)
+	W_3 = var([3,3,256,384],"T_NORMAL",dtype=dtype)
+	b_3 = var([384],"CONSTANT",0.1,dtype=dtype)
 	print "W_3:", W_3
 	print "b_3:", b_3
 	h_conv3 = tf.nn.relu(tf.nn.conv2d(h_pool2, W_3, strides=[1,1,1,1], padding='SAME') + b_3)
 	print "h_conv3:",h_conv3
 	
 	print "<Layer 4>"
-	W_4 = var([3,3,384,384],"T_NORMAL")
-	b_4 = var([384],"CONSTANT",0.1)
+	W_4 = var([3,3,384,384],"T_NORMAL",dtype=dtype)
+	b_4 = var([384],"CONSTANT",0.1,dtype=dtype)
 	print "W_4:", W_4
 	print "b_4:", b_4
 	h_conv4 = tf.nn.relu(tf.nn.conv2d(h_conv3, W_4, strides=[1,1,1,1], padding='SAME') + b_4)
 	print "h_conv4:",h_conv4
 	
 	print "<Layer 5>"
-	W_5 = var([3,3,384,256],"T_NORMAL")
-	b_5 = var([256],"CONSTANT",0.1)
+	W_5 = var([3,3,384,256],"T_NORMAL",dtype=dtype)
+	b_5 = var([256],"CONSTANT",0.1,dtype=dtype)
 	print "W_5:", W_5
 	print "b_5:", b_5
 	h_conv5 = tf.nn.relu(tf.nn.conv2d(h_conv4, W_5, strides=[1,1,1,1], padding='SAME') + b_5)
@@ -63,8 +69,8 @@ def net():
 	print "h_pool5:",h_pool5
 	
 	print "<Layer 6>"
-	W_6 = var([6 * 6 * 256,4096],"T_NORMAL")
-	b_6 = var([4096],"CONSTANT",0.1)
+	W_6 = var([6 * 6 * 256,4096],"T_NORMAL",dtype=dtype)
+	b_6 = var([4096],"CONSTANT",0.1,dtype=dtype)
 	print "W_6:", W_6
 	print "b_6:", b_6
 	h_pool5_flat = tf.reshape(h_pool5, [-1, 6 * 6 * 256])
@@ -72,36 +78,29 @@ def net():
 	print "h_full6:",h_full6
 	
 	print "<Layer 7>"
-	W_7 = var([4096,1000],"T_NORMAL")
-	b_7 = var([1000],"CONSTANT",0.1)
+	W_7 = var([4096,1000],"T_NORMAL",dtype=dtype)
+	b_7 = var([1000],"CONSTANT",0.1,dtype=dtype)
 	print "W_7:", W_7
 	print "b_7:", b_7	
 	y_full7 = tf.nn.relu(tf.matmul(h_full6, W_7) + b_7)
 	print "y_full7:",y_full7
 	
-	y_ = tf.placeholder(tf.float32, shape=[None, 1000])	
-	cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=y_full7))
-	optimizer = tf.train.GradientDescentOptimizer(1e-4).minimize(cross_entropy)
-	
-	predict = tf.equal(tf.argmax(y_full7, 1), tf.argmax(y_, 1))
-	accuracy = tf.reduce_mean(tf.cast(predict, tf.float32))
-	print "acc:",accuracy
+	y_ = tf.placeholder(dtype=dtype, shape=[None, 1000])
+	return [x,y_full7,y_]
 
-	iter = 10
-	frames = 100
+def train_with_dict(x,y_,optimizer,iter,data,frames):
 	tt = 0
 	with tf.Session() as sess:
 		sess.run(tf.global_variables_initializer())
+		#warm up
+		optimizer.run(feed_dict={x: data[0][0], y_: data[0][1]})
 		
-		#warm-up
-		batch = fake_data_np(227*227*3,1000,frames)
-		optimizer.run(feed_dict={x: batch[0], y_: batch[1]})
 		for i in range(iter):
+			#batch = fake_data_np(227*227*3,1000,frames)
 			
-			batch = fake_data_np(227*227*3,1000,frames)
 			lt = time()
 			print "train step (",i,")"
-			optimizer.run(feed_dict={x: batch[0], y_: batch[1]})
+			optimizer.run(feed_dict={x: data[i][0], y_: data[i][1]})
 			lt= time() - lt
 			print lt
 			tt += lt
@@ -109,15 +108,33 @@ def net():
 		print "Training Elapsed time(sec):",tt
 		print "Training Time per Iteration(sec):",tt/iter
 		print "Training Frame per Second:", frames*iter/tt
+
+def train_with_queue(x,y_,optimizer):
+	finput = fake_input(227*227*3,2)
+	flabel = fake_label(1000,2)
+	
+	q = tf.FIFOQueue(capacity=2, dtypes=[tf.float32,tf.float32], shapes=[[227*227*3],[1000]])
+	enque_op = q.enqueue_many([finput,flabel])
+	
+	input = q.dequeue()
+	
+	with tf.Session() as sess:
+		sess.run(tf.global_variables_initializer())
+		optimizer.run(input)
+			
+def classify_with_dict(x,y_,accuracy,iter,data,frames):
+	tt = 0
+	
+	with tf.Session() as sess:
+		sess.run(tf.global_variables_initializer())
+		#warm up
+		train_accuracy = accuracy.eval(feed_dict={x:data[0][0], y_:data[0][1]})
 		
-		tt = 0
-		iter = 10
-		frames = 100
 		for i in range(iter):
-			batch = fake_data_np(227*227*3,1000,frames)
+			#batch = fake_data_np(227*227*3,1000,frames)
 			print "classify step (",i,")"
 			lt = time()
-			train_accuracy = accuracy.eval(feed_dict={x:batch[0], y_:batch[1]})
+			train_accuracy = accuracy.eval(feed_dict={x:data[0][0], y_:data[0][1]})
 			lt= time() - lt
 			print lt
 			tt += lt
@@ -125,17 +142,48 @@ def net():
 		print "Classification Time per Iteration(sec):",tt/iter
 		print "Classification Frame per Second:",frames*iter/tt
 
-def testSimpleStatistics():
-  g = tf.Graph()
-  with g.as_default():
-    a = tf.Variable(tf.random_normal([25, 16]))
-    b = tf.Variable(tf.random_normal([16, 9]))
-    tf.matmul(a, b)
-    for op in g.get_operations():
-      flops = ops.get_stats_for_node_def(g, op.node_def, "flops").value
-      print(flops)
-#testSimpleStatistics()
+def bench_with_dict(dtype,op):
+	(x,y_full7,y_)=net_arch(dtype=dtype)
+		
+	cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=y_full7))
+	optimizer = tf.train.GradientDescentOptimizer(1e-4).minimize(cross_entropy)
+	
+	predict = tf.equal(tf.argmax(y_full7, 1), tf.argmax(y_, 1))
+	accuracy = tf.reduce_mean(tf.cast(predict, dtype=dtype))
+	print "acc:",accuracy
+	
+	print "generating fake data...."
+	iter = 10
+	frames = 512
+	if dtype == tf.float16:
+		data = [fake_data_np(227*227*3,1000,frames,dtype=np.float16) for i in range(iter)]
+	elif dtype == tf.float32:
+		data = [fake_data_np(227*227*3,1000,frames,dtype=np.float32) for i in range(iter)]
+	
+	if op == "train":
+		train_with_dict(x, y_, optimizer,iter,data,frames)
+	elif op == "classify":
+		classify_with_dict(x,y_,accuracy,iter,data,frames)
+	
+def bench_with_queues():
+	(x,y_full7,y_)=net_arch()
+	cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=y_full7))
+	optimizer = tf.train.GradientDescentOptimizer(1e-4).minimize(cross_entropy)
+	
+	predict = tf.equal(tf.argmax(y_full7, 1), tf.argmax(y_, 1))
+	accuracy = tf.reduce_mean(tf.cast(predict, tf.float32))
 
-with tf.device("/cpu:0"):
-	net()
+	train_with_queue(x,y_,optimizer)
 
+if __name__ == "__main__":
+	parser = argparse.ArgumentParser(description='Optional Arguments')
+	parser.add_argument("--dev",dest='device',default="gpu",type=str,help="valid options: cpu/gpu, default: gpu")
+	parser.add_argument("--dtype",dest='dtype',default="float16",type=str,help="valid options: float16/float32, default: float16")
+	parser.add_argument("--op",dest='op',default="classify",type=str,help="valid options: train/classify, default: classify")
+	args = parser.parse_args()
+	
+	print args.device,args.dtype,args.op
+	dtype = tf.float16 if args.dtype == "float16" else tf.float32
+	
+	with tf.device("/"+args.device+":0"):
+		bench_with_dict(dtype=dtype,op=args.op)
