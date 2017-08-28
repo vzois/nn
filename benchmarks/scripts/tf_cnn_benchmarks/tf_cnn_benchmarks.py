@@ -47,6 +47,8 @@ import preprocessing
 import variable_mgr
 import sys
 
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
 tf.flags.DEFINE_string('model', 'trivial', 'name of the model to run')
 
 # The code will first check if it's running under benchmarking mode
@@ -963,7 +965,7 @@ class BenchmarkCNN(object):
       execution_barrier = self.add_sync_queues_and_barrier(
           'execution_barrier_', [])
 
-    global_step = tf.contrib.framework.get_global_step()
+    global_step = tf.train.get_global_step()
     with tf.device(self.global_step_device):
       with tf.control_dependencies([main_fetch_group]):
         inc_global_step = global_step.assign_add(1)
@@ -1108,7 +1110,7 @@ class BenchmarkCNN(object):
     use_synthetic_gpu_images = (self.dataset is None)
 
     with tf.device(self.global_step_device):
-      global_step = tf.contrib.framework.get_or_create_global_step()
+      global_step = tf.train.get_or_create_global_step()
 
     # Build the processing and model for the worker.
     with tf.device(self.cpu_device):
@@ -1234,7 +1236,7 @@ class BenchmarkCNN(object):
         images_shape = host_images.get_shape()
         labels_shape = host_labels.get_shape()
         gpu_copy_stage = data_flow_ops.StagingArea(
-            [tf.float32, tf.int32],
+            [tf.float32, tf.int16],
             shapes=[images_shape, labels_shape])
         gpu_copy_stage_op = gpu_copy_stage.put(
             [host_images, host_labels])
@@ -1244,7 +1246,7 @@ class BenchmarkCNN(object):
     with tf.device(self.raw_devices[device_num]):
       if not use_synthetic_gpu_images:
         gpu_compute_stage = data_flow_ops.StagingArea(
-            [tf.float32, tf.int32],
+            [tf.float32, tf.int16],
             shapes=[images_shape, labels_shape]
         )
         # The CPU-to-GPU copy is triggered here.
@@ -1280,11 +1282,11 @@ class BenchmarkCNN(object):
       self.model_conf.add_inference(network)
       # Add the final fully-connected class layer
       logits = network.affine(nclass, activation='linear')
-      if not phase_train:
+      if not phase_train :
         top_1_op = tf.reduce_sum(
-            tf.cast(tf.nn.in_top_k(logits, labels, 1), data_type))
+            tf.cast(tf.nn.in_top_k(logits, labels, 1), tf.float32))
         top_5_op = tf.reduce_sum(
-            tf.cast(tf.nn.in_top_k(logits, labels, 5), data_type))
+            tf.cast(tf.nn.in_top_k(logits, labels, 5), tf.float32))
         return (logits, top_1_op, top_5_op)
       loss = loss_function(logits, labels)
       params = self.variable_mgr.trainable_variables_on_device(device_num)

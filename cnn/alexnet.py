@@ -10,6 +10,9 @@ from common import fake_data_np
 from common import fake_input
 from common import fake_label
 
+from common import conv2D
+from common import mxPool
+
 import argparse
 
 #import tensorflow.python.framework
@@ -164,26 +167,77 @@ def bench_with_dict(dtype,op):
 		train_with_dict(x, y_, optimizer,iter,data,frames)
 	elif op == "classify":
 		classify_with_dict(x,y_,accuracy,iter,data,frames)
-	
-def bench_with_queues():
-	(x,y_full7,y_)=net_arch()
-	cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=y_full7))
-	optimizer = tf.train.GradientDescentOptimizer(1e-4).minimize(cross_entropy)
-	
-	predict = tf.equal(tf.argmax(y_full7, 1), tf.argmax(y_, 1))
-	accuracy = tf.reduce_mean(tf.cast(predict, tf.float32))
 
-	train_with_queue(x,y_,optimizer)
+def alexnet(dtype=tf.float32,batch_size=16,dev='gpu'):
+	x_images = var([batch_size,3,227,227],"T_NORMAL",dtype=dtype) if dev == 'gpu' else var([batch_size,227,227,3],"T_NORMAL",dtype=dtype)
+	
+	W_1 = var([11,11,3,64],"T_NORMAL",dtype=dtype)
+	b_1 = var([64],"CONSTANT",0.1,dtype=dtype)
+	h_conv1 = conv2D(x_images,W_1,b_1,[1,1,4,4],'VALID','NCHW') if dev == 'gpu' else conv2D(x_images,W_1,b_1,[1,4,4,1],'VALID','NHWC')
+	h_pool1=mxPool(h_conv1,[1,1,3,3],[1,1,2,2],'VALID','NCHW') if dev == 'gpu' else mxPool(h_conv1,[1,3,3,1],[1,2,2,1],'VALID','NHWC')
+	print h_pool1
+        
+	W_2 = var([5,5,64,256],"T_NORMAL",dtype=dtype)
+	b_2 = var([256],"CONSTANT",0.1,dtype=dtype)
+	h_conv2 = conv2D(h_pool1,W_2,b_2,[1,1,1,1],'SAME','NCHW') if dev == 'gpu' else conv2D(h_pool1,W_2,b_2,[1,1,1,1],'SAME','NHWC')
+	h_pool2=mxPool(h_conv2,[1,1,3,3],[1,1,2,2],'VALID','NCHW') if dev == 'gpu' else mxPool(h_conv2,[1,3,3,1],[1,2,2,1],'VALID','NHWC')
+	print h_pool2
+        
+	W_3 = var([3,3,256,384],"T_NORMAL",dtype=dtype)
+	b_3 = var([384],"CONSTANT",0.1,dtype=dtype)
+	h_conv3 = conv2D(h_pool2,W_3,b_3,[1,1,1,1],'SAME','NCHW') if dev == 'gpu' else conv2D(h_pool2,W_3,b_3,[1,1,1,1],'SAME','NHWC') 
+	print h_conv3
+        
+	W_4 = var([3,3,384,384],"T_NORMAL",dtype=dtype)
+	b_4 = var([384],"CONSTANT",0.1,dtype=dtype)
+	h_conv4 = conv2D(h_conv3,W_4,b_4,[1,1,1,1],'SAME','NCHW') if dev == 'gpu' else conv2D(h_conv3,W_4,b_4,[1,1,1,1],'SAME','NHWC')
+	print h_conv4
+        
+	W_5 = var([3,3,384,256],"T_NORMAL",dtype=dtype)
+	b_5 = var([256],"CONSTANT",0.1,dtype=dtype)
+	h_conv5 = conv2D(h_conv4,W_5,b_5,[1,1,1,1],'SAME','NCHW') if dev == 'gpu' else conv2D(h_conv4,W_5,b_5,[1,1,1,1],'SAME','NHWC')
+	h_pool5 = mxPool(h_conv5,[1,1,3,3],[1,1,2,2],'VALID','NCHW') if dev == 'gpu' else mxPool(h_conv5,[1,3,3,1],[1,2,2,1],'VALID','NHWC')
+	print "h_:",h_pool5
+        
+	W_6 = var([6 * 6 * 256,4096],"T_NORMAL",dtype=dtype)
+	b_6 = var([4096],"CONSTANT",0.1,dtype=dtype)
+	h_pool5_flat = tf.reshape(h_pool5, [-1, 6 * 6 * 256])
+	print h_pool5
+	h_full6 = tf.nn.relu(tf.matmul(h_pool5_flat, W_6) + b_6)
+	print h_full6
+        
+	W_7 = var([4096,1000],"T_NORMAL",dtype=dtype)
+	b_7 = var([1000],"CONSTANT",0.1,dtype=dtype)
+	y_full7 = tf.nn.relu(tf.matmul(h_full6, W_7) + b_7)
+	print y_full7
+    
+	config = tf.ConfigProto(graph_options=tf.GraphOptions(optimizer_options=tf.OptimizerOptions(opt_level=tf.OptimizerOptions.L0)))
+	sess = tf.Session(config=config)
+	sess.run(tf.global_variables_initializer())
+    
+	sess.run(y_full7.op)
+	iter=100
+	start = time()
+	for i in range(iter):
+		if (i+1) % 10 == 0:
+			elapsed = time() - start
+			print "<",i/10,">: frames/sec ",10*batch_size/elapsed
+			start=time()
+		sess.run(y_full7.op)
+	
+	
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description='Optional Arguments')
 	parser.add_argument("--dev",dest='device',default="gpu",type=str,help="valid options: cpu/gpu, default: gpu")
 	parser.add_argument("--dtype",dest='dtype',default="float16",type=str,help="valid options: float16/float32, default: float16")
 	parser.add_argument("--op",dest='op',default="classify",type=str,help="valid options: train/classify, default: classify")
+	parser.add_argument("--bsize",dest='bsize',default=16,type=int,help="valid options: integer > 0, default: 16")
 	args = parser.parse_args()
 	
 	print args.device,args.dtype,args.op
 	dtype = tf.float16 if args.dtype == "float16" else tf.float32
 	
 	with tf.device("/"+args.device+":0"):
-		bench_with_dict(dtype=dtype,op=args.op)
+		#bench_with_dict(dtype=dtype,op=args.op)
+		alexnet(dtype=dtype,batch_size=args.bsize,dev=args.device)
