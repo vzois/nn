@@ -27,19 +27,16 @@ def fake_data_np(in_size,out_size,batch_size=1,dtype=np.float32):
 	return np.array([fake_in for _ in xrange(batch_size)], dtype=dtype), np.array([fake_out for _ in xrange(batch_size)], dtype=dtype)
 
 def var(shape,distr="",const=0.1,dtype=tf.float32):
-	global DEVICE
+	#if dtype != tf.float16 and dtype!=tf.float32:
+	#	return tf.cast(tf.Variable(tf.truncated_normal(shape, stddev = 0.1, dtype=tf.float16)),tf.int8)
 	if	distr == "T_NORMAL":
-		with tf.device(DEVICE):
-			return tf.Variable(tf.truncated_normal(shape, stddev = 0.1, dtype=dtype))
-	elif distr == "R_NORMAL":
-		with tf.device(DEVICE):
-			return tf.Variable(tf.random_normal(shape, stddev = 0.1, dtype=dtype))
-	elif distr == "CONSTANT":
-		with tf.device(DEVICE):
-			return tf.Variable(tf.constant(const,shape=shape,dtype=dtype))
+		return tf.Variable(tf.truncated_normal(shape, stddev = 0.1, dtype=dtype))
+	elif distr == "R_NORMAL":		
+		return tf.Variable(tf.random_normal(shape, stddev = 0.1, dtype=dtype))
+	elif distr == "CONSTANT":		
+		return tf.Variable(tf.constant(const,shape=shape,dtype=dtype))
 	else:
-		with tf.device(DEVICE):
-			return tf.Variable(tf.zeros(shape,dtype=dtype))
+		return tf.Variable(tf.zeros(shape,dtype=dtype))
 
 
 def conv2D(x,W,b,strides,padding,data_format='NCHW'):
@@ -47,4 +44,35 @@ def conv2D(x,W,b,strides,padding,data_format='NCHW'):
 
 def mxPool(x,ksize,strides,padding,data_format):
 	return tf.nn.max_pool(x,ksize=ksize, strides=strides, padding=padding,data_format=data_format)
-	
+
+def avgPool(x,ksize,strides,padding,data_format):
+	return tf.nn.avg_pool(x,ksize=ksize, strides=strides, padding=padding,data_format=data_format)
+
+
+def var_count():
+    total_parameters=0
+    for variable in tf.trainable_variables():
+        # shape is an array of tf.Dimension
+        shape = variable.get_shape()
+        #print(shape)
+        #print(len(shape))
+        variable_parametes = 1
+        for dim in shape:
+            #print(dim)
+            variable_parametes *= dim.value
+            #print(variable_parametes)
+            total_parameters += variable_parametes
+    #print("total parameters:",total_parameters)
+    weights = total_parameters
+    return weights
+
+def flops_count(g):
+    global flops
+    total_flops = 0
+    for op in g.get_operations():
+        f=ops.get_stats_for_node_def(g,op.node_def,'flops').value
+        if f != None:
+            #print(op.name,":",flops)
+            total_flops+=f
+    #print ("total_flops:",total_flops)
+    flops=total_flops

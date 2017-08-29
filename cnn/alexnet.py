@@ -168,8 +168,8 @@ def bench_with_dict(dtype,op):
 	elif op == "classify":
 		classify_with_dict(x,y_,accuracy,iter,data,frames)
 
-def alexnet(dtype=tf.float32,batch_size=16,dev='gpu'):
-	x_images = var([batch_size,3,227,227],"T_NORMAL",dtype=dtype) if dev == 'gpu' else var([batch_size,227,227,3],"T_NORMAL",dtype=dtype)
+def alexnet(dtype=tf.float32,batch_size=16,dev='gpu',width=227,height=227):
+	x_images = var([batch_size,3,width,height],"T_NORMAL",dtype=dtype) if dev == 'gpu' else var([batch_size,width,height,3],"T_NORMAL",dtype=dtype)
 	
 	W_1 = var([11,11,3,64],"T_NORMAL",dtype=dtype)
 	b_1 = var([64],"CONSTANT",0.1,dtype=dtype)
@@ -198,32 +198,37 @@ def alexnet(dtype=tf.float32,batch_size=16,dev='gpu'):
 	h_conv5 = conv2D(h_conv4,W_5,b_5,[1,1,1,1],'SAME','NCHW') if dev == 'gpu' else conv2D(h_conv4,W_5,b_5,[1,1,1,1],'SAME','NHWC')
 	h_pool5 = mxPool(h_conv5,[1,1,3,3],[1,1,2,2],'VALID','NCHW') if dev == 'gpu' else mxPool(h_conv5,[1,3,3,1],[1,2,2,1],'VALID','NHWC')
 	print "h_:",h_pool5
-        
-	W_6 = var([6 * 6 * 256,4096],"T_NORMAL",dtype=dtype)
+	
+	dim = h_pool5.get_shape().as_list()
+	#print dim[1]*dim[2]*dim[3]
+	W_6 = var([dim[1]*dim[2]*dim[3],4096],"T_NORMAL",dtype=dtype)
 	b_6 = var([4096],"CONSTANT",0.1,dtype=dtype)
-	h_pool5_flat = tf.reshape(h_pool5, [-1, 6 * 6 * 256])
+	h_pool5_flat = tf.reshape(h_pool5, [-1, dim[1]*dim[2]*dim[3]])
 	print h_pool5
 	h_full6 = tf.nn.relu(tf.matmul(h_pool5_flat, W_6) + b_6)
 	print h_full6
         
 	W_7 = var([4096,1000],"T_NORMAL",dtype=dtype)
 	b_7 = var([1000],"CONSTANT",0.1,dtype=dtype)
-	y_full7 = tf.nn.relu(tf.matmul(h_full6, W_7) + b_7)
-	print y_full7
+	y = tf.nn.relu(tf.matmul(h_full6, W_7) + b_7)
+	print y
     
 	config = tf.ConfigProto(graph_options=tf.GraphOptions(optimizer_options=tf.OptimizerOptions(opt_level=tf.OptimizerOptions.L0)))
 	sess = tf.Session(config=config)
 	sess.run(tf.global_variables_initializer())
     
-	sess.run(y_full7.op)
-	iter=100
-	start = time()
-	for i in range(iter):
-		if (i+1) % 10 == 0:
-			elapsed = time() - start
-			print "<",i/10,">: frames/sec ",10*batch_size/elapsed
-			start=time()
-		sess.run(y_full7.op)
+	config = tf.ConfigProto(graph_options=tf.GraphOptions(optimizer_options=tf.OptimizerOptions(opt_level=tf.OptimizerOptions.L0)))
+	with tf.Session(config=config) as sess:
+		sess.run(tf.global_variables_initializer())
+		sess.run(y.op)
+		iter=100
+		start = time()
+		for i in range(iter):
+			if (i+1) % 10 == 0:
+				elapsed = time() - start
+				print "<",i/10,">: frames/sec ",10*batch_size/elapsed
+				start=time()
+			sess.run(y.op)
 	
 	
 
@@ -233,11 +238,21 @@ if __name__ == "__main__":
 	parser.add_argument("--dtype",dest='dtype',default="float16",type=str,help="valid options: float16/float32, default: float16")
 	parser.add_argument("--op",dest='op',default="classify",type=str,help="valid options: train/classify, default: classify")
 	parser.add_argument("--bsize",dest='bsize',default=16,type=int,help="valid options: integer > 0, default: 16")
+	parser.add_argument("--w",dest='width',default=227,type=int,help="Frame Width, valid options: integer > 0, default: 227")
+	parser.add_argument("--h",dest='height',default=227,type=int,help="Frame Height, valid options: integer > 0, default: 227")
 	args = parser.parse_args()
 	
-	print args.device,args.dtype,args.op
+	if args.width <= 0:
+		print "Width has to be > 0 !!!"
+		exit(1)
+	if args.height <= 0:
+		print "Height has to be > 0 !!!"
+		exit(1)
+	if args.bsize <= 0:
+		print "Batch size has to be > 0 !!!"
+		exit(1)
+		
 	dtype = tf.float16 if args.dtype == "float16" else tf.float32
-	
 	with tf.device("/"+args.device+":0"):
 		#bench_with_dict(dtype=dtype,op=args.op)
-		alexnet(dtype=dtype,batch_size=args.bsize,dev=args.device)
+		alexnet(dtype=dtype,batch_size=args.bsize,dev=args.device,width=args.width, height=args.height)
