@@ -13,7 +13,9 @@ from common import fake_label
 from common import conv2D
 from common import mxPool
 
+
 import argparse
+
 
 #import tensorflow.python.framework
 		
@@ -168,8 +170,9 @@ def bench_with_dict(dtype,op):
 	elif op == "classify":
 		classify_with_dict(x,y_,accuracy,iter,data,frames)
 
-def alexnet(dtype=tf.float32,batch_size=16,dev='gpu',width=227,height=227):
+def alexnet(dtype=tf.float32,batch_size=16,dev='gpu',width=227,height=227,g=None):
 	x_images = var([batch_size,3,width,height],"T_NORMAL",dtype=dtype) if dev == 'gpu' else var([batch_size,width,height,3],"T_NORMAL",dtype=dtype)
+	#x_images = tf.random_normal([batch_size,3,width,height],dtype=dtype)
 	
 	W_1 = var([11,11,3,64],"T_NORMAL",dtype=dtype)
 	b_1 = var([64],"CONSTANT",0.1,dtype=dtype)
@@ -212,24 +215,33 @@ def alexnet(dtype=tf.float32,batch_size=16,dev='gpu',width=227,height=227):
 	b_7 = var([1000],"CONSTANT",0.1,dtype=dtype)
 	y = tf.nn.relu(tf.matmul(h_full6, W_7) + b_7)
 	print y
+	
+	op_list = [ op.name for op in g.get_operations() ]
+	flop_list = [ ops.get_stats_for_node_def(g, op.node_def, 'flops').value	 if ops.get_stats_for_node_def(g, op.node_def, 'flops').value != None else 0 for op in g.get_operations() ]
+	#exit()
     
-	config = tf.ConfigProto(graph_options=tf.GraphOptions(optimizer_options=tf.OptimizerOptions(opt_level=tf.OptimizerOptions.L0)))
-	sess = tf.Session(config=config)
-	sess.run(tf.global_variables_initializer())
+# 	config = tf.ConfigProto(graph_options=tf.GraphOptions(optimizer_options=tf.OptimizerOptions(opt_level=tf.OptimizerOptions.L0)))
+# 	sess = tf.Session(config=config)
+# 	sess.run(tf.global_variables_initializer())
     
-	config = tf.ConfigProto(graph_options=tf.GraphOptions(optimizer_options=tf.OptimizerOptions(opt_level=tf.OptimizerOptions.L0)))
+
+	if dev == 'cpu':
+		config = tf.ConfigProto(graph_options=tf.GraphOptions(optimizer_options=tf.OptimizerOptions(opt_level=tf.OptimizerOptions.L0)),device_count = {'GPU': 0})
+	else:
+		config = tf.ConfigProto(graph_options=tf.GraphOptions(optimizer_options=tf.OptimizerOptions(opt_level=tf.OptimizerOptions.L0)))
 	with tf.Session(config=config) as sess:
 		sess.run(tf.global_variables_initializer())
 		sess.run(y.op)
 		iter=100
+		
 		start = time()
 		for i in range(iter):
 			if (i+1) % 10 == 0:
-				elapsed = time() - start
-				print "<",i/10,">: frames/sec ",10*batch_size/elapsed
-				start=time()
+				print "<",i/10,">"
 			sess.run(y.op)
-	
+		elapsed = time() - start
+		print "frames/sec:",iter*batch_size/elapsed
+		print "flops:",sum(flop_list)
 	
 
 if __name__ == "__main__":
@@ -253,6 +265,8 @@ if __name__ == "__main__":
 		exit(1)
 		
 	dtype = tf.float16 if args.dtype == "float16" else tf.float32
-	with tf.device("/"+args.device+":0"):
-		#bench_with_dict(dtype=dtype,op=args.op)
-		alexnet(dtype=dtype,batch_size=args.bsize,dev=args.device,width=args.width, height=args.height)
+	with tf.Graph().as_default() as g:
+		alexnet(dtype=dtype,batch_size=args.bsize,dev=args.device,width=args.width, height=args.height, g=g)			
+
+
+

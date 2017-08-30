@@ -43,7 +43,7 @@ def inception_(name,layers, player,dtype,dev):
             if type == 'conv':
                 W_ = var([shape[0],shape[0],input_channels,output_channels],"T_NORMAL",dtype=dtype)
                 b_ = var([output_channels],"CONSTANT",0.1,dtype=dtype)
-                op = conv2D(player,W_,b_,[1,1,stride[0],stride[1]],padding,'NCHW') if dev == 'gpu' else conv2D(h_conv2,W_3,b_3,[1,stride[0],stride[1],1],padding,'NHWC')
+                op = conv2D(player,W_,b_,[1,1,stride[0],stride[1]],padding,'NCHW') if dev == 'gpu' else conv2D(player,W_,b_,[1,stride[0],stride[1],1],padding,'NHWC')
             elif type == 'mxpool':
                 op = mxPool(player,[1,1,shape[0],shape[1]],[1,1,stride[0],stride[1]],padding,'NCHW') if dev == 'gpu' else mxPool(player,[1,shape[0],shape[1],1],[1,stride[0],stride[1],1],padding,'NHWC')
                 
@@ -51,7 +51,7 @@ def inception_(name,layers, player,dtype,dev):
             print op
     return tf.concat(op_list,1) if dev == 'gpu' else tf.concat(op_list,3) 
         
-def googlenet(dtype=tf.float32,batch_size=16,dev='gpu',width=227, height=227):
+def googlenet(dtype=tf.float32,batch_size=16,dev='gpu',width=227, height=227,g=None):
     x_images = var([batch_size,3,width,height],"T_NORMAL",dtype=dtype) if dev == 'gpu' else var([batch_size,width,height,3],"T_NORMAL",dtype=dtype)
     
     W_1 = var([7,7,3,64],"T_NORMAL",dtype=dtype)
@@ -184,18 +184,27 @@ def googlenet(dtype=tf.float32,batch_size=16,dev='gpu',width=227, height=227):
     y = tf.reshape(h_pool7,[-1,1024])
     print y
     
-    config = tf.ConfigProto(graph_options=tf.GraphOptions(optimizer_options=tf.OptimizerOptions(opt_level=tf.OptimizerOptions.L0)))
+    op_list = [ op.name for op in g.get_operations() ]
+    flop_list = [ ops.get_stats_for_node_def(g, op.node_def, 'flops').value     if ops.get_stats_for_node_def(g, op.node_def, 'flops').value != None else 0 for op in g.get_operations() ]
+    
+    if dev == 'cpu':
+        config = tf.ConfigProto(graph_options=tf.GraphOptions(optimizer_options=tf.OptimizerOptions(opt_level=tf.OptimizerOptions.L0)),device_count = {'GPU': 0})
+    else:
+        config = tf.ConfigProto(graph_options=tf.GraphOptions(optimizer_options=tf.OptimizerOptions(opt_level=tf.OptimizerOptions.L0)))
+    
     with tf.Session(config=config) as sess:
         sess.run(tf.global_variables_initializer())
         sess.run(y.op)
         iter=100
+        
         start = time()
         for i in range(iter):
             if (i+1) % 10 == 0:
-                elapsed = time() - start
-                print "<",i/10,">: frames/sec ",10*batch_size/elapsed
-                start=time()
+                print "<",i/10,">"
             sess.run(y.op)
+        elapsed = time() - start
+        print "frames/sec:",iter*batch_size/elapsed
+        print "flops:",sum(flop_list)
     
     #print "weights:",var_count()
 
@@ -221,5 +230,5 @@ if __name__ == "__main__":
     
 
     dtype = tf.float16 if args.dtype == "float16" else tf.float32    
-    with tf.device("/"+args.device+":0"):
-        googlenet(dtype=dtype,batch_size=args.bsize,dev=args.device,width=args.width,height=args.height)
+    with tf.Graph().as_default() as g:
+        googlenet(dtype=dtype,batch_size=args.bsize,dev=args.device,width=args.width,height=args.height,g=g)

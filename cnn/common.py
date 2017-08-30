@@ -1,6 +1,8 @@
+from tensorflow.python.framework import ops
 import tensorflow as tf
 import random
 import numpy as np
+
 
 DEVICE="/gpu:0"
 
